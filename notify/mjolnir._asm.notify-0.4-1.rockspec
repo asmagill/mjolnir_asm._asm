@@ -15,7 +15,7 @@ version = "0.4-1"
 local url = "github.com/asmagill/mjolnir_asm._asm"
 local desc = "Apple's built-in notifications system for Mjolnir."
 
-source = {url = "git://" .. url, dir = "mjolnir_asm.asm/notify"}
+source = {url = "git://" .. url, dir = "mjolnir_asm._asm/notify"}
 description = {
   summary = desc,
   detailed = desc,
