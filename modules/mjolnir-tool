@@ -1,0 +1,317 @@
+#! /usr/bin/env lua
+
+local tools = require("mjolnir._asm.modules")
+
+local latest_version = function(data)
+    local t = tools.sorted_versions(data)
+
+    return t[#t]
+
+end
+
+function show_help()
+    print([[
+Usage: mjolnir-tool command [...]
+
+    available [<term>|--all]
+        Show available modules/luarocks and versions which contain <term> in
+        their name.  If <term> is --all, then return all available modules.
+        If <term> is not present, use "mjolnir".
+
+    examples
+        Show some examples of the usage of mjolnir-tools.
+        
+    help
+        Display this help information
+        
+    install <name> [<tree> ...]
+        Install the latest version of <name> into tree <tree> (default
+        "mjolnir") Any other arguments after tree are passed into Luarocks
+        as is, so format accordingly.
+        
+    installed [<tree>|--all]
+        Show installed modules/luarocks and versions for the specified tree
+        or all trees (default "mjolnir")
+        
+    report [<tree>|--all] [-q] [-c|o|a|l]
+        Generate a report for the specified <tree> (default "mjolnir") or
+        all trees, if -all specified. If -q is specified, only the name of
+        modules/luarocks which meet the report criteria will be displayed.
+        If no criteria is specified, then -oal is the default.  The criteria
+        is defined as follows:
+            -c      display modules which are current
+            -o      display modules which are outdated
+            -a      display modules which are available (and contain "mjolnir"
+                    in the name -- see `available` if you want others)
+            -l      display modules which are local only or for which the
+                    local version is newer than what is found in the remote
+                    repositories.
+                    
+    remove <name> [<tree> ...]
+        Remove <name> from <tree> (default "mjolnir") Any other arguments
+        after tree are passed into Luarocks as is, so format accordingly.
+        
+    trees
+        List the defined trees and their path.
+        
+You can change the default tree from "mjolnir" to something else by creating
+file: ']]..os.getenv("HOME")..[[/.mjolnir/.mjolnir._asm.modules.lua"'
+and putting the following into it:
+
+    return {
+         -- default_tree: is the luarocks tree to use by default
+         default_tree = "mjolnir",
+    }
+
+where "mjolnir" is your preferred default tree.
+]])
+    return true
+end
+
+function show_examples()
+    print([[
+Examples:
+
+    mjolnir-tool install inspect system
+        Install the inspect module into the system tree.
+    
+    mjolnir-tool install mjolnir.hotkey
+        Install mjolnir.hotkey into the mjolnir tree.
+        
+    mjolnir-tool install mjolnir.hotkey mjolnir 0.2-1 --keep
+        Install version 0.2-1 of mjolnir.hotkey into the mjolnir tree,
+        keeping any other versions around.
+        
+    mjolnir-tool remove mjolnir.hotkey mjolnir 0.2-1
+        Remove mjolnir.hotkey version 0.2-1 specifically, leaving other
+        versions (if they exist) intact.
+        
+    mjolnir-tool report --all -coal
+        Show installed modules/luarocks for all repositories, showing
+        current, outdated, available (mjolnir), and local modules.
+        
+    mjolnir-tool report -q -o
+        Provide just a list of outdated modules in the mjolnir tree,
+        perhaps for use with another command or script.
+]])
+    return true
+end
+
+function install_module(...) 
+    local results = table.pack(tools.install(...))
+    print(table.unpack(results))
+--    for _,i in ipairs(results) do
+--        print(i)
+--    end
+    return true
+end
+
+function remove_module(...)
+    local results = table.pack(tools.remove(...))
+    print(table.unpack(results))
+--    for _,i in ipairs(results) do
+--        print(i)
+--    end
+    return true
+end
+
+function module_report(...)
+    local args = table.pack(...)
+    local tree
+    local flags = ""
+    
+    for _, i in ipairs(args) do
+        if i == "--all" then
+            tree = "--all"
+        elseif string.match(i,"^[^-].+$") then
+            tree = i
+        else
+            flags = flags..string.match(i,"^-(.+)$")
+        end
+    end
+    
+    if flags == "" then flags = "oal" end
+    if not tree then tree = tools.default_tree end
+    
+    local line_fmt = "%-30s  %-10s  %-10s  %-10s" 
+    local results, available, t = {}, {}, {}
+
+    if not flags:match("q") then
+        print("Tree: "..tree.."   Flags: -"..flags)
+        print(string.format(line_fmt, "Module", "Installed", "Latest", "Status"))
+        print(string.rep("-", 66))
+    end
+    
+    results = tools.versions(tree)
+    
+    available = tools.available(tools.default_tree)
+    for i,v in pairs(available) do
+        if not results[i] then
+            results[i] = {
+                available = latest_version(v),
+                installed = "",
+                local_only = false,
+                upgrade = false,
+            }
+        end
+    end
+    
+    for i, _ in pairs(results) do table.insert(t, i) end
+    table.sort(t)
+
+    for _, i in ipairs(t) do
+        local do_i_print, status = false, ""
+
+        if results[i].upgrade then
+            if flags:match("o") then
+                do_i_print = true
+                status = "outdated"
+            end
+        end
+        
+        if results[i].local_only then
+            if flags:match("l") then
+                do_i_print = true
+                status = "local"
+            end
+        end
+        
+        if not (results[i].local_only or results[i].upgrade) then
+            if results[i].installed == results[i].available then
+                if flags:match("c") then
+                    do_i_print = true
+                    status = "current"
+                end
+            elseif results[i].installed == "" then
+                if flags:match("a") then
+                    do_i_print = true
+                    status = "available"
+                end
+            else
+                if flags:match("l") then
+                    do_i_print = true
+                    status = "local"
+                end
+            end
+        end
+        
+        if do_i_print then
+            if flags:match("q") then
+                print(i)
+            else
+                print(string.format(line_fmt, i, results[i].installed, results[i].available, status))
+            end
+        end
+    end
+    return true
+end
+
+function available_modules(...)
+    local results, count = {}, table.pack(...).n
+    local line_fmt = "%-30s  %s" 
+
+    if count == 0 then
+        results = tools.available(tools.default_tree)
+    elseif count == 1 and table.pack(...)[1] == "--all" then
+        results = tools.available("")
+    else
+        results = tools.available(...)
+    end
+    
+    local names, value = {} , {}
+    
+    for i,v in pairs(results) do
+        table.insert(names, i)
+        value[i] = v
+    end
+    
+    if #names > 0 then
+        table.sort(names)
+        for i,v in ipairs(names) do
+            local versions = tools.sorted_versions(value[v], true)
+            
+            print(string.format(line_fmt, v, table.concat(versions,", ")))
+        end
+    else
+        print("No results matched your query")
+    end
+    return true
+end
+
+function installed_modules(...)
+    local results = {}
+    local line_fmt = "%-30s  %s" 
+
+    if table.pack(...).n ~= 0 then
+        results = tools.installed(...)
+    else
+        results = tools.installed(tools.default_tree)
+    end
+    
+    local names, value = {} , {}
+    
+    for i,v in pairs(results) do
+        table.insert(names, i)
+        value[i] = v
+    end
+    
+    if #names > 0 then
+        table.sort(names)
+        for i,v in ipairs(names) do
+            local versions = tools.sorted_versions(value[v], true)
+            
+            print(string.format(line_fmt, v, table.concat(versions, ", ")))
+        end
+    else
+        print("No modules in specified tree")
+    end
+    return true
+end
+
+function list_trees(...)
+    local results = tools.trees()
+    local names, paths = {}, {} 
+    
+    print("Default: "..tools.default_tree)
+    for _,i in ipairs(results) do
+        table.insert(names, i.name)
+        paths[i.name] = i.root
+    end
+    
+    table.sort(names)
+    for _,i in ipairs(names) do
+        print((tools.default_tree == i and "*" or " ").." "..i, paths[i])
+    end
+    return true
+end
+
+function print_versions(...)
+    local line_fmt = "%-30s  %-10s  %-10s  %-10s  %-10s" 
+    local results, t = {}, {}
+    print(string.format(line_fmt, "Module", "Installed", "Latest", "Local-Only", "Upgradable"))
+    print(string.rep("-", 78))
+
+    results = tools.versions(...)
+    for i, _ in pairs(results) do table.insert(t, i) end
+    table.sort(t)
+
+    for _, i in ipairs(t) do
+        print(string.format(line_fmt, i, results[i].installed, results[i].available, results[i].local_only, results[i].upgrade))
+    end
+end
+
+local commands = {
+    help = show_help,
+    install = install_module,
+    report = module_report,
+    remove = remove_module,
+    available = available_modules,
+    installed = installed_modules,
+    trees = list_trees,
+    examples = show_examples,
+}
+
+local args = table.pack(...)
+local cmd = table.remove(args,1)
+
+return commands[cmd] and commands[cmd](table.unpack(args)) or commands["help"]()

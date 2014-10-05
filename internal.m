@@ -1,7 +1,7 @@
 #import <Cocoa/Cocoa.h>
 #import <lauxlib.h>
 
-#define _VERSION_TAG_   "0.0.1-prealpha"
+#define _VERSION_TAG_   "0.1-1"
 
 //  Add Base64 encode/decode?
 //
