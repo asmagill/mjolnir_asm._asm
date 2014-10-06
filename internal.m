@@ -77,7 +77,7 @@ id lua_to_NSObject(lua_State* L, int idx) {
 // NSUserDefaults to lua data type
 //   data type (as deduced from 'man defaults') is missing... add it?
 void NSObject_to_lua(lua_State* L, id obj) {
-    NSLog(@"NSO2l: %@",obj) ;
+//    NSLog(@"NSO2l: %@",obj) ;
     if (obj == nil || [obj isEqual: [NSNull null]]) { lua_pushnil(L); }
     else if ([obj isKindOfClass: [NSDictionary class]]) {
         BOOL handled = NO;
